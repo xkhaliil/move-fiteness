@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import Link from "next/link";
-import { SESSION_COOKIE } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 import { TEAM } from "@/lib/team";
 import { Avatar } from "@/components/ui/Avatar";
 import { RatingBadge } from "@/components/ui/RatingBadge";
@@ -74,8 +73,8 @@ function CheckIcon({ className }: { className?: string }) {
 }
 
 export default async function LandingPage() {
-  const cookieStore = await cookies();
-  if (cookieStore.get(SESSION_COOKIE)?.value) {
+  const user = await getCurrentUser();
+  if (user) {
     redirect("/feed");
   }
 
