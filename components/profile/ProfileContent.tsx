@@ -13,18 +13,27 @@ import { RatingBadge } from "@/components/ui/RatingBadge";
 import { ActivityCard } from "@/components/ui/ActivityCard";
 import { LinkButton } from "@/components/ui/Button";
 
-export function ProfileContent({
+export async function ProfileContent({
   profileUser,
   isOwn,
 }: {
   profileUser: User;
   isOwn: boolean;
 }) {
-  const hosted = getActivities().filter((a) => a.hostId === profileUser.id);
-  const joinedActivityIds = getJoinRequestsForUser(profileUser.id)
+  const allActivities = await getActivities();
+  const hosted = allActivities.filter((a) => a.hostId === profileUser.id);
+
+  const joinRequests = await getJoinRequestsForUser(profileUser.id);
+  const approvedActivityIds = joinRequests
     .filter((r) => r.status === "approved")
-    .map((r) => r.activityId)
-    .filter((activityId) => getActivityById(activityId)?.hostId !== profileUser.id);
+    .map((r) => r.activityId);
+  const joinedActivityIds: string[] = [];
+  for (const activityId of approvedActivityIds) {
+    const activity = await getActivityById(activityId);
+    if (activity && activity.hostId !== profileUser.id) {
+      joinedActivityIds.push(activityId);
+    }
+  }
 
   return (
     <div className="px-4 py-6 lg:mx-auto lg:max-w-4xl lg:px-8 lg:py-8">
@@ -78,14 +87,14 @@ export function ProfileContent({
             Hosting
           </h2>
           <div className="mt-3 flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-4">
-            {hosted.map((activity) => (
+            {await Promise.all(hosted.map(async (activity) => (
               <ActivityCard
                 key={activity.id}
                 activity={activity}
                 host={profileUser}
-                headcount={getHeadcount(activity.id)}
+                headcount={await getHeadcount(activity.id)}
               />
-            ))}
+            )))}
           </div>
         </section>
       )}
@@ -96,20 +105,21 @@ export function ProfileContent({
             Joined
           </h2>
           <div className="mt-3 flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-4">
-            {joinedActivityIds.map((activityId) => {
-              const activity = getActivityById(activityId);
+            {await Promise.all(joinedActivityIds.map(async (activityId) => {
+              const activity = await getActivityById(activityId);
               if (!activity) return null;
-              const host = getUserById(activity.hostId);
+              const host = await getUserById(activity.hostId);
               if (!host) return null;
+              const headcount = await getHeadcount(activity.id);
               return (
                 <ActivityCard
                   key={activity.id}
                   activity={activity}
                   host={host}
-                  headcount={getHeadcount(activity.id)}
+                  headcount={headcount}
                 />
               );
-            })}
+            }))}
           </div>
         </section>
       )}

@@ -46,7 +46,7 @@ export default async function NotificationsPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const notifications = getFeedNotifications(user.id);
+  const notifications = await getFeedNotifications(user.id);
 
   return (
     <div>
@@ -60,8 +60,8 @@ export default async function NotificationsPage() {
             description="Join or post an activity and updates will show up here."
           />
         ) : (
-          notifications.map((n) => {
-            const activity = getActivityById(n.activityId);
+          await Promise.all(notifications.map(async (n) => {
+            const activity = await getActivityById(n.activityId);
             if (!activity) return null;
             const { text, href } = describeNotification(n, activity.title);
             return (
@@ -84,7 +84,7 @@ export default async function NotificationsPage() {
                 </p>
               </Link>
             );
-          })
+          }))
         )}
       </div>
     </div>

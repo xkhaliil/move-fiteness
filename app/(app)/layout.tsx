@@ -14,7 +14,8 @@ export default async function AppLayout({
     redirect("/");
   }
 
-  const unreadCount = getFeedNotifications(user!.id).filter((n) => !n.read).length;
+  const notifications = await getFeedNotifications(user!.id);
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col pb-20 lg:max-w-6xl lg:pb-0 lg:pl-60">

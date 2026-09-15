@@ -19,11 +19,12 @@ const VALID_TYPES: ActivityType[] = [
   "swimming",
 ];
 
-function pickInterestedSeeders(type: ActivityType, hostId: string, count: number): string[] {
-  const candidates = getUsers().filter(
+async function pickInterestedSeeders(type: ActivityType, hostId: string, count: number): Promise<string[]> {
+  const users = await getUsers();
+  const candidates = users.filter(
     (u) => u.id !== hostId && u.interests.includes(type)
   );
-  const pool = candidates.length > 0 ? candidates : getUsers().filter((u) => u.id !== hostId);
+  const pool = candidates.length > 0 ? candidates : users.filter((u) => u.id !== hostId);
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count).map((u) => u.id);
 }
@@ -49,7 +50,7 @@ export async function createActivityAction(formData: FormData): Promise<void> {
 
   const dateTime = new Date(dateTimeInput).toISOString();
 
-  const activity = createActivity({
+  const activity = await createActivity({
     hostId: user.id,
     type,
     title,
@@ -62,9 +63,9 @@ export async function createActivityAction(formData: FormData): Promise<void> {
   });
 
   const interestedCount = Math.random() < 0.5 ? 1 : 2;
-  const seededInterested = pickInterestedSeeders(type, user.id, interestedCount);
+  const seededInterested = await pickInterestedSeeders(type, user.id, interestedCount);
   for (const seedUserId of seededInterested) {
-    createJoinRequest(activity.id, seedUserId, "pending");
+    await createJoinRequest(activity.id, seedUserId, "pending");
   }
 
   revalidatePath("/feed");

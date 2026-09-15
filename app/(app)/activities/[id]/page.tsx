@@ -26,25 +26,27 @@ export default async function ActivityDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const activity = getActivityById(id);
+  const activity = await getActivityById(id);
   if (!activity) notFound();
 
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const host = getUserById(activity!.hostId);
+  const host = await getUserById(activity!.hostId);
   if (!host) notFound();
 
-  const approvedIds = getApprovedParticipantIds(activity!.id);
-  const participants = approvedIds.map((pid) => getUserById(pid)).filter(Boolean);
+  const approvedIds = await getApprovedParticipantIds(activity!.id);
+  const participants = (
+    await Promise.all(approvedIds.map((pid) => getUserById(pid)))
+  ).filter(Boolean);
   const past = isActivityPast(activity!);
   const isHost = activity!.hostId === user.id;
-  const myRequest = getJoinRequest(activity!.id, user.id);
+  const myRequest = await getJoinRequest(activity!.id, user.id);
   const isFull = approvedIds.length >= activity!.capacity;
-  const pendingCount = getJoinRequestsForActivity(activity!.id).filter(
+  const pendingCount = (await getJoinRequestsForActivity(activity!.id)).filter(
     (r) => r.status === "pending"
   ).length;
-  const peopleToRate = past ? getPeopleToRate(user.id, activity!.id) : [];
+  const peopleToRate = past ? await getPeopleToRate(user.id, activity!.id) : [];
 
   return (
     <div>

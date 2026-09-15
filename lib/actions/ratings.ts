@@ -18,7 +18,7 @@ export async function submitRating(formData: FormData): Promise<void> {
   const rawTag = String(formData.get("tag") ?? "");
   const tag = (VALID_TAGS.includes(rawTag as RatingTag) ? rawTag : null) as RatingTag;
 
-  const activity = getActivityById(activityId);
+  const activity = await getActivityById(activityId);
   if (
     activity &&
     isActivityPast(activity) &&
@@ -26,9 +26,9 @@ export async function submitRating(formData: FormData): Promise<void> {
     rateeId !== user!.id &&
     score >= 1 &&
     score <= 5 &&
-    !hasRated(activityId, user!.id, rateeId)
+    !(await hasRated(activityId, user!.id, rateeId))
   ) {
-    createRating({
+    await createRating({
       activityId,
       raterId: user!.id,
       rateeId,

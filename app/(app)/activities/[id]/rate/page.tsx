@@ -21,13 +21,13 @@ export default async function RateActivityPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const activity = getActivityById(id);
+  const activity = await getActivityById(id);
   if (!activity || !isActivityPast(activity)) notFound();
 
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const rateeIds = getPeopleToRate(user.id, activity!.id);
+  const rateeIds = await getPeopleToRate(user.id, activity!.id);
 
   return (
     <div>
@@ -44,8 +44,8 @@ export default async function RateActivityPage({
             description="Thanks for the feedback — it helps keep MOVE! trustworthy."
           />
         ) : (
-          rateeIds.map((rateeId) => {
-            const ratee = getUserById(rateeId);
+          await Promise.all(rateeIds.map(async (rateeId) => {
+            const ratee = await getUserById(rateeId);
             if (!ratee) return null;
             return (
               <form
@@ -85,7 +85,7 @@ export default async function RateActivityPage({
                 </Button>
               </form>
             );
-          })
+          }))
         )}
       </div>
     </div>

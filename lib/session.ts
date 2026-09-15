@@ -8,5 +8,5 @@ export async function getCurrentUser(): Promise<User | undefined> {
   const store = await cookies();
   const userId = store.get(SESSION_COOKIE)?.value;
   if (!userId) return undefined;
-  return getUserById(userId);
+  return await getUserById(userId);
 }

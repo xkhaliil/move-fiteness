@@ -26,7 +26,8 @@ export default async function FeedPage({
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const upcoming = getActivities()
+  const allActivities = await getActivities();
+  const upcoming = allActivities
     .filter((a) => !isActivityPast(a))
     .filter((a) =>
       category ? ACTIVITY_CATEGORY_BY_TYPE[a.type] === category : true
@@ -74,18 +75,21 @@ export default async function FeedPage({
             }
           />
         ) : (
-          upcoming.map((activity) => {
-            const host = getUserById(activity.hostId);
-            if (!host) return null;
-            return (
-              <ActivityCard
-                key={activity.id}
-                activity={activity}
-                host={host}
-                headcount={getHeadcount(activity.id)}
-              />
-            );
-          })
+          await Promise.all(
+            upcoming.map(async (activity) => {
+              const host = await getUserById(activity.hostId);
+              if (!host) return null;
+              const headcount = await getHeadcount(activity.id);
+              return (
+                <ActivityCard
+                  key={activity.id}
+                  activity={activity}
+                  host={host}
+                  headcount={headcount}
+                />
+              );
+            })
+          )
         )}
       </div>
     </div>

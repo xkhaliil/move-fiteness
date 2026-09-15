@@ -20,7 +20,7 @@ export default async function ManageRequestsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const activity = getActivityById(id);
+  const activity = await getActivityById(id);
   if (!activity) notFound();
 
   const user = await getCurrentUser();
@@ -29,7 +29,7 @@ export default async function ManageRequestsPage({
     redirect(`/activities/${id}`);
   }
 
-  const requests = getJoinRequestsForActivity(activity!.id);
+  const requests = await getJoinRequestsForActivity(activity!.id);
   const pending = requests.filter((r) => r.status === "pending");
   const approved = requests.filter((r) => r.status === "approved");
 
@@ -49,8 +49,8 @@ export default async function ManageRequestsPage({
             />
           ) : (
             <div className="mt-3 flex flex-col gap-2">
-              {pending.map((req) => {
-                const requester = getUserById(req.userId);
+              {await Promise.all(pending.map(async (req) => {
+                const requester = await getUserById(req.userId);
                 if (!requester) return null;
                 return (
                   <div
@@ -89,7 +89,7 @@ export default async function ManageRequestsPage({
                     </div>
                   </div>
                 );
-              })}
+              }))}
             </div>
           )}
         </section>
@@ -102,8 +102,8 @@ export default async function ManageRequestsPage({
             <p className="mt-3 text-sm text-text-muted">No one confirmed yet.</p>
           ) : (
             <div className="mt-3 flex flex-col gap-2">
-              {approved.map((req) => {
-                const participant = getUserById(req.userId);
+              {await Promise.all(approved.map(async (req) => {
+                const participant = await getUserById(req.userId);
                 if (!participant) return null;
                 return (
                   <Link
@@ -124,7 +124,7 @@ export default async function ManageRequestsPage({
                     </div>
                   </Link>
                 );
-              })}
+              }))}
             </div>
           )}
         </section>

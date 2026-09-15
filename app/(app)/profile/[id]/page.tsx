@@ -10,7 +10,7 @@ export default async function UserProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const profileUser = getUserById(id);
+  const profileUser = await getUserById(id);
   if (!profileUser) notFound();
 
   const currentUser = await getCurrentUser();

@@ -16,13 +16,13 @@ export async function completeOnboarding(formData: FormData): Promise<void> {
     redirect("/onboarding?error=name");
   }
 
-  const user = createUser({
+  const user = await createUser({
     name,
     city,
     interests: interests.slice(0, 3),
   });
 
-  createJoinRequest(PAST_ONBOARDING_ACTIVITY_ID, user.id, "approved");
+  await createJoinRequest(PAST_ONBOARDING_ACTIVITY_ID, user.id, "approved");
 
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, user.id, {

@@ -23,22 +23,26 @@ export interface FeedNotification {
 
 const REMINDER_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-function peopleToRate(userId: string, activityId: string): string[] {
-  const activity = getActivityById(activityId);
+async function peopleToRate(userId: string, activityId: string): Promise<string[]> {
+  const activity = await getActivityById(activityId);
   if (!activity) return [];
-  const approved = getApprovedParticipantIds(activityId);
+  const approved = await getApprovedParticipantIds(activityId);
 
   if (activity.hostId === userId) {
-    return approved.filter((id) => !hasRated(activityId, userId, id));
+    const unrated: string[] = [];
+    for (const id of approved) {
+      if (!(await hasRated(activityId, userId, id))) unrated.push(id);
+    }
+    return unrated;
   }
   if (approved.includes(userId)) {
-    return hasRated(activityId, userId, activity.hostId) ? [] : [activity.hostId];
+    return (await hasRated(activityId, userId, activity.hostId)) ? [] : [activity.hostId];
   }
   return [];
 }
 
-export function getFeedNotifications(userId: string): FeedNotification[] {
-  const stored: FeedNotification[] = getNotificationsForUser(userId).map((n) => ({
+export async function getFeedNotifications(userId: string): Promise<FeedNotification[]> {
+  const stored: FeedNotification[] = (await getNotificationsForUser(userId)).map((n) => ({
     id: n.id,
     type: n.type,
     activityId: n.activityId,
@@ -49,8 +53,8 @@ export function getFeedNotifications(userId: string): FeedNotification[] {
   const synthesized: FeedNotification[] = [];
   const now = Date.now();
 
-  for (const activity of getActivities()) {
-    const approved = getApprovedParticipantIds(activity.id);
+  for (const activity of await getActivities()) {
+    const approved = await getApprovedParticipantIds(activity.id);
     const involved = activity.hostId === userId || approved.includes(userId);
     if (!involved) continue;
 
@@ -65,7 +69,7 @@ export function getFeedNotifications(userId: string): FeedNotification[] {
           read: false,
         });
       }
-    } else if (peopleToRate(userId, activity.id).length > 0) {
+    } else if ((await peopleToRate(userId, activity.id)).length > 0) {
       synthesized.push({
         id: `rating-${activity.id}`,
         type: "rating_prompt",
@@ -81,6 +85,6 @@ export function getFeedNotifications(userId: string): FeedNotification[] {
   );
 }
 
-export function getPeopleToRate(userId: string, activityId: string): string[] {
+export async function getPeopleToRate(userId: string, activityId: string): Promise<string[]> {
   return peopleToRate(userId, activityId);
 }

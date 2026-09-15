@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { cache } from "react";
+import { Redis } from "@upstash/redis";
 import type {
   Activity,
   JoinRequest,
@@ -64,7 +67,48 @@ function buildStore(): Store {
   };
 }
 
-function getStore(): Store {
+function nextId(prefix: string): string {
+  return `${prefix}-${randomUUID()}`;
+}
+
+// --- Persistence backend ---
+//
+// This app's whole dataset is small, so it's persisted as a single JSON
+// blob in Redis (works with either the "Vercel KV" or Marketplace
+// "Upstash" Redis integration — both inject env vars under one of the
+// names below). Without those env vars (e.g. local `next dev`), it falls
+// back to a plain in-memory global, matching the previous behavior.
+//
+// This is a single-document store with no transactional locking: two
+// writes racing at the exact same instant can clobber each other. Fine
+// for this app's traffic; a real production app would want per-entity
+// keys or optimistic locking instead.
+
+const STORE_KEY = "move:store:v1";
+
+function readRedisEnv(): { url: string; token: string } | null {
+  const url =
+    process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
+  const token =
+    process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  return { url, token };
+}
+
+const redis = (() => {
+  const env = readRedisEnv();
+  return env ? new Redis({ url: env.url, token: env.token }) : null;
+})();
+
+const getStore = cache(async (): Promise<Store> => {
+  if (redis) {
+    const existing = await redis.get<Store>(STORE_KEY);
+    if (existing) return existing;
+    const fresh = buildStore();
+    await redis.set(STORE_KEY, fresh);
+    return fresh;
+  }
+
   if (!global.__moveStore) {
     global.__moveStore = buildStore();
   }
@@ -72,30 +116,33 @@ function getStore(): Store {
   // changes; backfill any fields that predate the cached instance.
   global.__moveStore.waitlist ??= [];
   return global.__moveStore;
-}
+});
 
-let idCounter = 0;
-function nextId(prefix: string): string {
-  idCounter += 1;
-  return `${prefix}-${Date.now()}-${idCounter}`;
+async function persistStore(store: Store): Promise<void> {
+  if (redis) {
+    await redis.set(STORE_KEY, store);
+  }
+  // In-memory fallback: `store` already *is* `global.__moveStore` (same
+  // reference), so the mutation is already visible — nothing else to do.
 }
 
 // --- Users ---
 
-export function getUsers(): User[] {
-  return getStore().users;
+export async function getUsers(): Promise<User[]> {
+  return (await getStore()).users;
 }
 
-export function getUserById(id: string): User | undefined {
-  return getStore().users.find((u) => u.id === id);
+export async function getUserById(id: string): Promise<User | undefined> {
+  return (await getStore()).users.find((u) => u.id === id);
 }
 
-export function createUser(input: {
+export async function createUser(input: {
   name: string;
   city: string;
   interests: User["interests"];
   bio?: string;
-}): User {
+}): Promise<User> {
+  const store = await getStore();
   const user: User = {
     id: nextId("u"),
     name: input.name,
@@ -107,13 +154,21 @@ export function createUser(input: {
     ratingCount: 0,
     createdAt: new Date().toISOString(),
   };
-  getStore().users.push(user);
+  store.users.push(user);
+  await persistStore(store);
   return user;
 }
 
-export function setUserPremium(userId: string, isPremium: boolean): void {
-  const user = getUserById(userId);
-  if (user) user.isPremium = isPremium;
+export async function setUserPremium(
+  userId: string,
+  isPremium: boolean
+): Promise<void> {
+  const store = await getStore();
+  const user = store.users.find((u) => u.id === userId);
+  if (user) {
+    user.isPremium = isPremium;
+    await persistStore(store);
+  }
 }
 
 export function ratingAverage(user: Pick<User, "ratingSum" | "ratingCount">): number | null {
@@ -123,21 +178,25 @@ export function ratingAverage(user: Pick<User, "ratingSum" | "ratingCount">): nu
 
 // --- Activities ---
 
-export function getActivities(): Activity[] {
-  return getStore().activities;
+export async function getActivities(): Promise<Activity[]> {
+  return (await getStore()).activities;
 }
 
-export function getActivityById(id: string): Activity | undefined {
-  return getStore().activities.find((a) => a.id === id);
+export async function getActivityById(id: string): Promise<Activity | undefined> {
+  return (await getStore()).activities.find((a) => a.id === id);
 }
 
-export function createActivity(input: Omit<Activity, "id" | "createdAt">): Activity {
+export async function createActivity(
+  input: Omit<Activity, "id" | "createdAt">
+): Promise<Activity> {
+  const store = await getStore();
   const activity: Activity = {
     ...input,
     id: nextId("a"),
     createdAt: new Date().toISOString(),
   };
-  getStore().activities.push(activity);
+  store.activities.push(activity);
+  await persistStore(store);
   return activity;
 }
 
@@ -147,29 +206,33 @@ export function isActivityPast(activity: Activity): boolean {
 
 // --- Join requests ---
 
-export function getJoinRequestsForActivity(activityId: string): JoinRequest[] {
-  return getStore().joinRequests.filter((r) => r.activityId === activityId);
+export async function getJoinRequestsForActivity(activityId: string): Promise<JoinRequest[]> {
+  return (await getStore()).joinRequests.filter((r) => r.activityId === activityId);
 }
 
-export function getJoinRequestsForUser(userId: string): JoinRequest[] {
-  return getStore().joinRequests.filter((r) => r.userId === userId);
+export async function getJoinRequestsForUser(userId: string): Promise<JoinRequest[]> {
+  return (await getStore()).joinRequests.filter((r) => r.userId === userId);
 }
 
-export function getJoinRequest(activityId: string, userId: string): JoinRequest | undefined {
-  return getStore().joinRequests.find(
+export async function getJoinRequest(
+  activityId: string,
+  userId: string
+): Promise<JoinRequest | undefined> {
+  return (await getStore()).joinRequests.find(
     (r) => r.activityId === activityId && r.userId === userId
   );
 }
 
-export function getJoinRequestById(id: string): JoinRequest | undefined {
-  return getStore().joinRequests.find((r) => r.id === id);
+export async function getJoinRequestById(id: string): Promise<JoinRequest | undefined> {
+  return (await getStore()).joinRequests.find((r) => r.id === id);
 }
 
-export function createJoinRequest(
+export async function createJoinRequest(
   activityId: string,
   userId: string,
   status: JoinRequestStatus = "pending"
-): JoinRequest {
+): Promise<JoinRequest> {
+  const store = await getStore();
   const request: JoinRequest = {
     id: nextId("jr"),
     activityId,
@@ -177,64 +240,79 @@ export function createJoinRequest(
     status,
     requestedAt: new Date().toISOString(),
   };
-  getStore().joinRequests.push(request);
+  store.joinRequests.push(request);
+  await persistStore(store);
   return request;
 }
 
-export function setJoinRequestStatus(id: string, status: JoinRequestStatus): JoinRequest | undefined {
-  const request = getJoinRequestById(id);
-  if (request) request.status = status;
+export async function setJoinRequestStatus(
+  id: string,
+  status: JoinRequestStatus
+): Promise<JoinRequest | undefined> {
+  const store = await getStore();
+  const request = store.joinRequests.find((r) => r.id === id);
+  if (request) {
+    request.status = status;
+    await persistStore(store);
+  }
   return request;
 }
 
-export function getApprovedParticipantIds(activityId: string): string[] {
-  return getJoinRequestsForActivity(activityId)
+export async function getApprovedParticipantIds(activityId: string): Promise<string[]> {
+  return (await getJoinRequestsForActivity(activityId))
     .filter((r) => r.status === "approved")
     .map((r) => r.userId);
 }
 
-export function getHeadcount(activityId: string): number {
-  return getApprovedParticipantIds(activityId).length;
+export async function getHeadcount(activityId: string): Promise<number> {
+  return (await getApprovedParticipantIds(activityId)).length;
 }
 
 // --- Ratings ---
 
-export function hasRated(activityId: string, raterId: string, rateeId: string): boolean {
-  return getStore().ratings.some(
+export async function hasRated(
+  activityId: string,
+  raterId: string,
+  rateeId: string
+): Promise<boolean> {
+  return (await getStore()).ratings.some(
     (r) => r.activityId === activityId && r.raterId === raterId && r.rateeId === rateeId
   );
 }
 
-export function createRating(input: {
+export async function createRating(input: {
   activityId: string;
   raterId: string;
   rateeId: string;
   score: number;
   tag: RatingTag;
-}): Rating {
+}): Promise<Rating> {
+  const store = await getStore();
   const rating: Rating = {
     id: nextId("r"),
     ...input,
     createdAt: new Date().toISOString(),
   };
-  getStore().ratings.push(rating);
+  store.ratings.push(rating);
 
-  const ratee = getUserById(input.rateeId);
+  const ratee = store.users.find((u) => u.id === input.rateeId);
   if (ratee) {
     ratee.ratingSum += input.score;
     ratee.ratingCount += 1;
   }
 
+  await persistStore(store);
   return rating;
 }
 
 // --- Notifications ---
 
-export function createNotification(
+export async function createNotification(
   userId: string,
   type: NotificationType,
   activityId: string
-): Notification {
+): Promise<Notification> {
+  const store = await getStore();
   const notification: Notification = {
     id: nextId("n"),
     userId,
@@ -243,40 +321,53 @@ export function createNotification(
     read: false,
     createdAt: new Date().toISOString(),
   };
-  getStore().notifications.push(notification);
+  store.notifications.push(notification);
+  await persistStore(store);
   return notification;
 }
 
-export function getNotificationsForUser(userId: string): Notification[] {
-  return getStore()
-    .notifications.filter((n) => n.userId === userId)
+export async function getNotificationsForUser(userId: string): Promise<Notification[]> {
+  return (await getStore()).notifications
+    .filter((n) => n.userId === userId)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
-export function markNotificationRead(id: string): void {
-  const notification = getStore().notifications.find((n) => n.id === id);
-  if (notification) notification.read = true;
+export async function markNotificationRead(id: string): Promise<void> {
+  const store = await getStore();
+  const notification = store.notifications.find((n) => n.id === id);
+  if (notification) {
+    notification.read = true;
+    await persistStore(store);
+  }
 }
 
-export function markAllNotificationsRead(userId: string): void {
-  for (const n of getStore().notifications) {
-    if (n.userId === userId) n.read = true;
+export async function markAllNotificationsRead(userId: string): Promise<void> {
+  const store = await getStore();
+  let changed = false;
+  for (const n of store.notifications) {
+    if (n.userId === userId && !n.read) {
+      n.read = true;
+      changed = true;
+    }
+  }
+  if (changed) {
+    await persistStore(store);
   }
 }
 
 // --- Waitlist ---
 
-export function addToWaitlist(email: string): { alreadyJoined: boolean } {
+export async function addToWaitlist(email: string): Promise<{ alreadyJoined: boolean }> {
   const normalized = email.trim().toLowerCase();
-  const existing = getStore().waitlist.find(
-    (w) => w.email.toLowerCase() === normalized
-  );
+  const store = await getStore();
+  const existing = store.waitlist.find((w) => w.email.toLowerCase() === normalized);
   if (existing) return { alreadyJoined: true };
 
-  getStore().waitlist.push({
+  store.waitlist.push({
     id: nextId("wl"),
     email: email.trim(),
     joinedAt: new Date().toISOString(),
   });
+  await persistStore(store);
   return { alreadyJoined: false };
 }
