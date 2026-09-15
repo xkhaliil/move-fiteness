@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0b0d0f;
+  --surface: #1a1d21;
+  --surface-raised: #22262b;
+  --border: rgba(255, 255, 255, 0.08);
+
+  --accent: #c6ff4d;
+  --accent-ink: #0b0d0f;
+  --accent-secondary: #35d0e8;
+
+  --text: #f5f6f7;
+  --text-muted: #8b9299;
+
+  --warning: #ffb020;
+  --danger: #f2555a;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-secondary: var(--accent-secondary);
+
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --font-display: var(--font-archivo-black);
+  --font-sans: var(--font-inter);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.animate-float {
+  animation: float 5.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float {
+    animation: none;
+  }
+}
