@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { completeOnboarding } from "@/lib/actions/auth";
-import { SESSION_COOKIE } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 import { ACTIVITY_TYPE_LABEL, type ActivityType } from "@/lib/types";
 import { ActivityIcon } from "@/components/ui/ActivityIcon";
 import { Button } from "@/components/ui/Button";
@@ -9,8 +8,8 @@ import { Button } from "@/components/ui/Button";
 const TYPES = Object.keys(ACTIVITY_TYPE_LABEL) as ActivityType[];
 
 export default async function OnboardingPage() {
-  const cookieStore = await cookies();
-  if (cookieStore.get(SESSION_COOKIE)?.value) {
+  const user = await getCurrentUser();
+  if (user) {
     redirect("/feed");
   }
 
